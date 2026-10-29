@@ -1,0 +1,11 @@
+{
+    admin off
+    auto_https disable_redirects
+    default_sni {$MINIFILES_TLS_HOST}
+    skip_install_trust
+}
+
+https://{$MINIFILES_TLS_HOST}:8443 {
+    tls internal
+    reverse_proxy minifiles:8000
+}

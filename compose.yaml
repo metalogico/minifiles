@@ -1,0 +1,79 @@
+name: minifiles
+services:
+  minifiles:
+    build: .
+    image: ${MINIFILES_IMAGE:-minifiles:local}
+    restart: unless-stopped
+    user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
+    environment:
+      MINIFILES_USERNAME: ${MINIFILES_USERNAME:?Set the username}
+      MINIFILES_PASSWORD: ${MINIFILES_PASSWORD:?Set the password}
+      MINIFILES_ORIGIN: ${MINIFILES_ORIGIN:?Set the web origin}
+      MINIFILES_DATA_ROOT: /data
+      MINIFILES_CONFIG_ROOT: /config
+      MINIFILES_SESSION_SECONDS: ${MINIFILES_SESSION_SECONDS:-43200}
+      MINIFILES_UPLOAD_IDLE_SECONDS: ${MINIFILES_UPLOAD_IDLE_SECONDS:-120}
+      MINIFILES_MAX_UPLOADS: ${MINIFILES_MAX_UPLOADS:-4}
+      MINIFILES_MAX_UPLOAD_BYTES: ${MINIFILES_MAX_UPLOAD_BYTES:-0}
+      MINIFILES_RESERVE_BYTES: ${MINIFILES_RESERVE_BYTES:-1073741824}
+    volumes:
+      - type: bind
+        source: ${MINIFILES_DATA_PATH:-./local-data}
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIFILES_CONFIG_PATH:-./local-config}
+        target: /config
+        bind:
+          create_host_path: false
+    mem_limit: 512m
+    cpus: 2
+    pids_limit: 128
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  https:
+    build:
+      context: .
+      dockerfile: Dockerfile.https
+    image: ${MINIFILES_HTTPS_IMAGE:-minifiles-https:local}
+    restart: unless-stopped
+    user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
+    environment:
+      MINIFILES_TLS_HOST: ${MINIFILES_TLS_HOST:-127.0.0.1}
+    ports:
+      - "${MINIFILES_BIND_IP:-127.0.0.1}:${MINIFILES_PORT:-8090}:8443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: ${MINIFILES_TLS_PATH:-./tls-data}
+        target: /data
+        bind:
+          create_host_path: false
+    depends_on:
+      minifiles:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 1
+    pids_limit: 64
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /config:size=4m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

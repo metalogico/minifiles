@@ -1,0 +1,62 @@
+# Optional, production-only companion. Uses the same image as the application.
+services:
+  backup:
+    image: ${MINIFILES_IMAGE:-minifiles:local}
+    command: [python, -m, scripts.backup_schedule]
+    restart: unless-stopped
+    user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
+    depends_on:
+      minifiles:
+        condition: service_healthy
+    environment:
+      MINIFILES_BACKUP_VOLUME_ID: ${MINIFILES_BACKUP_VOLUME_ID:?Set the backup disk identity}
+    volumes:
+      - type: bind
+        source: ${MINIFILES_SERVICE_PATH:?Set the service directory}
+        target: /service
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        # SQLite opens the database read-only, but WAL coordination may create sidecars.
+        source: ${MINIFILES_CONFIG_PATH:?Set the settings directory}
+        target: /service/config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIFILES_BACKUP_PATH:?Set the backup destination}
+        target: /backup
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIFILES_TLS_PATH:-./tls-data}
+        target: /service/tls-data
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/share/zoneinfo/Europe/Rome
+        target: /usr/share/zoneinfo/Europe/Rome
+        read_only: true
+        bind:
+          create_host_path: false
+    network_mode: none
+    mem_limit: 96m
+    cpus: 0.25
+    pids_limit: 32
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    healthcheck:
+      test: [CMD, python, -m, scripts.backup_schedule, --health]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
