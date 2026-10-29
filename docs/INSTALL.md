@@ -1,19 +1,19 @@
 # Installation
 
-MiniFiles uses published GHCR images with Docker Compose. Download the main source archive using the [README](../README.md#install-with-docker-compose), then run these commands from its extracted directory. Docker Compose 2.24.4 or newer is required.
+MiniFiles uses one published GHCR application image with Docker Compose. Download the main source archive using the [README](../README.md#install-with-docker-compose), then run these commands from its extracted directory. Docker Compose 2.24.4 or newer is required.
 
 ## Prepare the host
 
 - Use a local filesystem with hard-link support and Linux ownership/permissions. Uploads are published through a hard link on the data filesystem. Nested mounts and symlinks are not upload destinations.
 - Allow enough disk space for the uploaded files plus the configured reserve (1 GiB by default). Temporary uploads live on the data disk, not in the container's writable layer.
-- Choose one numeric UID/GID that can write to the data root, settings directory and TLS directory. MiniFiles runs without root and does not change host ownership automatically.
-- Reserve an available TCP port, 8090 by default. Only the HTTPS proxy publishes a port.
+- Choose one numeric UID/GID that can write to the data root, settings directory (and TLS directory when using optional Caddy). MiniFiles runs without root and does not change host ownership automatically.
+- Reserve an available TCP port, 8090 by default. The base stack publishes HTTP on loopback; the HTTPS override replaces that listener with Caddy.
 
 ```sh
 cp .env.example .env
 chmod 600 .env
-mkdir -p local-data local-config tls-data
-chmod 700 local-config tls-data
+mkdir -p local-data local-config
+chmod 700 local-config
 id -u
 id -g
 ```
@@ -24,22 +24,9 @@ For a new installation under a different service account, create only the new se
 
 Set `MINIFILES_DATA_PATH` to the actual mounted data directory. The default `./local-data` is an empty local installation. Compose deliberately refuses missing bind paths rather than silently creating a directory on the wrong disk.
 
-## LAN access
+## Local start
 
-The defaults bind to `127.0.0.1`, making MiniFiles accessible only from the server itself. For another computer on your private network, set all address values together. For example, if you control the hostname `files.home.arpa` and it resolves to your server:
-
-```dotenv
-MINIFILES_ORIGIN=https://files.home.arpa:8090
-MINIFILES_TLS_HOST=files.home.arpa
-MINIFILES_BIND_IP=0.0.0.0
-MINIFILES_PORT=8090
-```
-
-`0.0.0.0` listens on all IPv4 interfaces; use the server's specific LAN IP instead when appropriate. You can also use the server's IP as both `TLS_HOST` and the host in `ORIGIN`. The browser must use that exact HTTPS origin, including a non-default port. The TLS host contains only a hostname/IP, without scheme, port or path. Use a hostname or IPv4 address with the supplied Compose port mapping.
-
-The supplied Caddy configuration uses its own local CA, including for DNS hostnames. It does not obtain a public certificate. Keep the service on a trusted LAN or private network; public internet exposure is outside the supplied deployment configuration.
-
-## Pull and start
+The base `.env.example` uses `MINIFILES_ORIGIN=http://127.0.0.1:8090`. This HTTP setup is only for the server itself. MiniFiles requires an HTTPS origin for use outside loopback.
 
 ```sh
 docker compose config --quiet
@@ -48,9 +35,54 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-`config --quiet` checks interpolation without printing credentials. It does not check host permissions, TLS trust or application startup. `pull` downloads the published application and HTTPS proxy; both must use the same published main commit. The Caddy configuration is included in the proxy image. The runtime uses a single Uvicorn worker, a read-only application filesystem and writable bind mounts for persistent state.
+Open `http://127.0.0.1:8090`. Only the MiniFiles image is downloaded. The app health check calls `/health`; configuration, streaming uploads and the one-worker model are unchanged.
 
-The app's Docker health check calls `/health`; Compose starts the proxy after the backend is healthy. The proxy has no Docker health check, so also verify HTTPS as below. If startup fails, inspect only this stack with `docker compose logs --tail=50`. Missing paths, incorrect ownership, an existing instance on the data volume, insufficient private-directory permissions and unchanged password placeholders prevent startup.
+## Use an existing reverse proxy
+
+Keep `MINIFILES_BIND_IP=127.0.0.1` when the reverse proxy runs on the host. Set `MINIFILES_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://files.home.arpa`. Forward all paths to `http://127.0.0.1:8090`, preserving the Host and Origin headers. Recreate MiniFiles after editing `.env`.
+
+If the proxy runs in another container, its localhost is not the Docker host. Connect it and MiniFiles to a shared Docker network with an override and use `minifiles:8000` as the upstream; remove the host port with `ports: !reset []` if it is not needed. Do not expose the plain HTTP listener on an untrusted network. Configure the proxy for streaming request bodies, sufficient upload limits and timeouts for large files. TLS and certificate backups belong to that proxy.
+
+For an existing Caddy installation, the relevant upstream directive is:
+
+```caddyfile
+files.home.arpa {
+    tls internal
+    reverse_proxy 127.0.0.1:8090
+}
+```
+
+This example assumes Caddy runs on the same host and uses a local CA; keep your existing certificate configuration when appropriate. Do not add the MiniFiles HTTPS override when using your own proxy.
+
+## Optional Caddy HTTPS
+
+`compose.https.yaml` adds the official, digest-pinned `caddy` image. There is no custom MiniFiles proxy image. Caddy runs with the configured non-root UID/GID, a read-only root filesystem and only `NET_BIND_SERVICE` in its capability bounding set, which the official binary's file capability requires. It reads `docker/Caddyfile` through a read-only bind and keeps its existing CA under `MINIFILES_TLS_PATH`.
+
+Create a private TLS directory owned by the service identity:
+
+```sh
+mkdir -p tls-data
+chmod 700 tls-data
+```
+
+For local HTTPS, set `MINIFILES_ORIGIN=https://127.0.0.1:8090`. For LAN access, use a hostname that resolves to your server or its IPv4 address, and set these values together:
+
+```dotenv
+MINIFILES_ORIGIN=https://files.home.arpa:8090
+MINIFILES_TLS_HOST=files.home.arpa
+MINIFILES_BIND_IP=0.0.0.0
+MINIFILES_PORT=8090
+```
+
+The TLS host has no scheme, port or path; the origin is the exact browser URL including the non-default port. Use a specific LAN bind address instead of `0.0.0.0` when appropriate. The supplied configuration uses a local CA, not a public certificate.
+
+```sh
+docker compose -f compose.yaml -f compose.https.yaml config --quiet
+docker compose -f compose.yaml -f compose.https.yaml pull
+docker compose -f compose.yaml -f compose.https.yaml up -d --wait
+```
+
+**Keep both `-f` options for every subsequent command**, including updates and backups. The merged configuration publishes only Caddy's HTTPS port; the application's HTTP port is removed. The proxy starts after the app is healthy; verify its HTTPS response as described below. `config --quiet` validates configuration without printing credentials, but does not verify host permissions or TLS trust.
 
 ## HTTPS and client trust
 
@@ -75,7 +107,7 @@ Use your configured hostname/IP and port in that URL. Expected result: `{"status
 A certificate error usually means the client does not trust the CA, the browser's hostname differs from `MINIFILES_TLS_HOST`, or an old certificate/CA was retained by the client. An origin error at login means `MINIFILES_ORIGIN` differs from the address in the browser. Restart after editing `.env`:
 
 ```sh
-docker compose up -d --force-recreate --wait
+docker compose -f compose.yaml -f compose.https.yaml up -d --force-recreate --wait
 ```
 
 ## Configuration reference
@@ -87,7 +119,7 @@ docker compose up -d --force-recreate --wait
 | `MINIFILES_TLS_HOST` | `127.0.0.1`; certificate hostname/IP |
 | `MINIFILES_BIND_IP`, `MINIFILES_PORT` | `127.0.0.1`, `8090`; host listener |
 | `MINIFILES_UID`, `MINIFILES_GID` | `1000`, `1000`; numeric process identity |
-| `MINIFILES_IMAGE`, `MINIFILES_HTTPS_IMAGE` | GHCR app and proxy references: latest or matching sha-COMMIT tags |
+| `MINIFILES_IMAGE` | GHCR application reference: latest or sha-COMMIT; Caddy is pinned separately in its override |
 | `MINIFILES_DATA_PATH` | `./local-data`; mounted at `/data` in the app |
 | `MINIFILES_CONFIG_PATH` | `./local-config`; mounted at `/config` |
 | `MINIFILES_TLS_PATH` | `./tls-data`; mounted at `/data` in the proxy |

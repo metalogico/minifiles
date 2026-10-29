@@ -32,6 +32,9 @@ def test_configuration_archive_and_restore(tmp_path):
     db.save_section(section)
     (source / ".env").write_text("MINIFILES_PASSWORD=test-only-value\n")
     (source / "compose.yaml").write_text("name: minifiles\n")
+    (source / "compose.https.yaml").write_text("services: {https: {image: caddy}}\n")
+    (source / "docker").mkdir()
+    (source / "docker/Caddyfile").write_text("https://localhost:8443 { tls internal }\n")
     (source / "tls-data/caddy/pki").mkdir(parents=True)
     (source / "tls-data/caddy/pki/root.key").write_bytes(b"test-only-ca-key")
     state = run_once(source, destination, "test-volume", "2026-10-27T08:00", separate_device=False)
@@ -41,6 +44,8 @@ def test_configuration_archive_and_restore(tmp_path):
     with tarfile.open(archive) as tar:
         assert tar.extractfile("service/.env").read() == (source / ".env").read_bytes()
         assert tar.extractfile("service/tls-data/caddy/pki/root.key").read() == b"test-only-ca-key"
+        for name in ("compose.https.yaml", "docker/Caddyfile"):
+            assert tar.extractfile("service/" + name).read() == (source / name).read_bytes()
         restored = tmp_path / "restored.sqlite3"
         restored.write_bytes(tar.extractfile("config/minifiles.sqlite3").read())
     with sqlite3.connect(restored) as connection:

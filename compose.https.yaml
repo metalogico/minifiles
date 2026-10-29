@@ -1,0 +1,44 @@
+# Optional local-CA HTTPS. Use after compose.yaml.
+services:
+  minifiles:
+    ports: !reset []
+
+  https:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
+    environment:
+      MINIFILES_TLS_HOST: ${MINIFILES_TLS_HOST:-127.0.0.1}
+    ports:
+      - "${MINIFILES_BIND_IP:-127.0.0.1}:${MINIFILES_PORT:-8090}:8443"
+    volumes:
+      - type: bind
+        source: ./docker/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIFILES_TLS_PATH:-./tls-data}
+        target: /data
+        bind:
+          create_host_path: false
+    depends_on:
+      minifiles:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    # The official binary carries this file capability; keep it in the bounding set.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 1
+    pids_limit: 64
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /config:size=4m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

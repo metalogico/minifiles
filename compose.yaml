@@ -15,6 +15,8 @@ services:
       MINIFILES_MAX_UPLOADS: ${MINIFILES_MAX_UPLOADS:-4}
       MINIFILES_MAX_UPLOAD_BYTES: ${MINIFILES_MAX_UPLOAD_BYTES:-0}
       MINIFILES_RESERVE_BYTES: ${MINIFILES_RESERVE_BYTES:-1073741824}
+    ports:
+      - "${MINIFILES_BIND_IP:-127.0.0.1}:${MINIFILES_PORT:-8090}:8000"
     volumes:
       - type: bind
         source: ${MINIFILES_DATA_PATH:-./local-data}
@@ -35,38 +37,6 @@ services:
     tmpfs:
       - /tmp:size=16m,mode=1777
     stop_grace_period: 20s
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: '3'
-
-  https:
-    image: ${MINIFILES_HTTPS_IMAGE:-ghcr.io/metalogico/minifiles-https:latest}
-    restart: unless-stopped
-    user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
-    environment:
-      MINIFILES_TLS_HOST: ${MINIFILES_TLS_HOST:-127.0.0.1}
-    ports:
-      - "${MINIFILES_BIND_IP:-127.0.0.1}:${MINIFILES_PORT:-8090}:8443"
-    volumes:
-      - type: bind
-        source: ${MINIFILES_TLS_PATH:-./tls-data}
-        target: /data
-        bind:
-          create_host_path: false
-    depends_on:
-      minifiles:
-        condition: service_healthy
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    mem_limit: 128m
-    cpus: 1
-    pids_limit: 64
-    tmpfs:
-      - /tmp:size=16m,mode=1777
-      - /config:size=4m,mode=1777
     logging:
       driver: json-file
       options:

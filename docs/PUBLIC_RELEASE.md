@@ -1,5 +1,7 @@
 # Public distribution preparation — 29 October 2026
 
+Historical record of the initial source preparation. Current image publication and optional official-Caddy installation are described in [RELEASING.md](RELEASING.md) and [INSTALL.md](INSTALL.md).
+
 This record covers the local preparation of the application repository. No commit, push, GitHub publication, release or server deployment was performed.
 
 ## Source and documentation

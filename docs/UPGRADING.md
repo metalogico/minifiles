@@ -7,7 +7,7 @@ Use `https://github.com/metalogico/minifiles/archive/COMMIT.tar.gz` for a source
 1. Review the target main commit and migration requirements. Retain the current version/image digest and installation files.
 2. Create and verify a [backup](BACKUPS.md); export it off the host. Preserve `.env`, application data and any private TLS state. Never copy a live SQLite file without the documented snapshot procedure.
 3. Download the source archive for the target main commit into a **separate directory**. Compare its Compose and example environment with your deployed configuration. Copy approved configuration changes into the existing installation directory; keep your private `.env` and existing override files.
-4. Set `MINIFILES_IMAGE=ghcr.io/metalogico/minifiles:sha-COMMIT` in your existing `.env`, replacing COMMIT with the full published main commit SHA. `latest` is also supported, but a pinned commit gives you control over updates. Update `MINIFILES_HTTPS_IMAGE` to the same version as `MINIFILES_IMAGE`. Review new environment variables individually.
+4. Set `MINIFILES_IMAGE=ghcr.io/metalogico/minifiles:sha-COMMIT` in your existing `.env`, replacing COMMIT with the full published main commit SHA. `latest` is also supported, but a pinned commit gives you control over updates. Review new environment variables individually.
 
 Use the same `-p`, `--env-file` and `-f` options on **every** command when your deployment uses them. The abbreviated commands below assume the default files and project name. Let every upload finish before stopping the stack.
 
@@ -36,9 +36,15 @@ Changing the image is safe only when it uses the same storage and a compatible s
 
 The local smoke script tests a fresh image-only install and persistence across container recreation. GitHub Actions does not run these tests. It does not inspect or migrate a particular home server's historical database.
 
-## Custom proxy configuration
+## Move from the custom HTTPS image to official Caddy
 
-The published MiniFiles HTTPS image includes the standard Caddyfile. If the old deployment customized `docker/Caddyfile`, preserve it with an explicit read-only bind override at `/etc/caddy/Caddyfile` and test that configuration before the transition. Keep the TLS data bind unchanged.
+The base Compose now contains only MiniFiles. Existing HTTPS installations must explicitly include `-f compose.yaml -f compose.https.yaml` on every command, including the initial pull and recreation. Keep the same Compose project name, `.env`, HTTPS origin, bind address, port, UID/GID and absolute data/settings/TLS paths. If using the scheduled backup companion, include `-f compose.backup.yaml` too.
+
+The service remains named `https`, and the TLS mount inside Caddy remains `/data`. The official image is pinned to the same Caddy version used by the former custom image. Reusing that mount preserves the CA and its private keys; do not create a replacement TLS directory. Place the supplied `docker/Caddyfile` in the installation directory, preserving any deliberate local customizations. The new override mounts it read-only. `MINIFILES_HTTPS_IMAGE` and `MINIFILES_HTTPS_BUILD_IMAGE` are no longer used and can be removed from the private environment.
+
+Rehearse the transition using copied settings and TLS state in an isolated stack. Check CA-verified HTTPS, login, existing sections and files, then backup. The local smoke script can exercise the transition with `--https --previous-proxy-image OLD_LOCAL_IMAGE` when that old image is available.
+
+If switching to an already-existing reverse proxy instead, follow [INSTALL.md](INSTALL.md#use-an-existing-reverse-proxy). A different proxy may use a different CA; preserve the old TLS backup and plan client trust explicitly.
 
 ## Rollback
 

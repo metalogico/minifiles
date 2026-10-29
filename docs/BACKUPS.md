@@ -37,7 +37,7 @@ MINIFILES_BACKUP_PATH=/mnt/backup/minifiles
 MINIFILES_BACKUP_VOLUME_ID=your-backup-volume-marker
 ```
 
-Use actual absolute paths. `SERVICE_PATH` is this checkout/deployment directory containing `.env` and Compose files (and source, if retained). `CONFIG_PATH` and `TLS_PATH` remain those of the main stack; the companion mounts the configured settings directory as `/service/config` and TLS state as `/service/tls-data`. The host must provide `/usr/share/zoneinfo/Europe/Rome`, as mounted by the companion Compose file.
+Use actual absolute paths. `SERVICE_PATH` is this checkout/deployment directory containing `.env` and Compose files (and source, if retained). `CONFIG_PATH` and `TLS_PATH` remain those of the main stack; the companion mounts the configured settings directory as `/service/config` and TLS state as `/service/tls-data`. The host must provide `/usr/share/zoneinfo/Europe/Rome`, as mounted by the companion Compose file. The companion expects `MINIFILES_TLS_PATH` to exist. If an external proxy manages TLS, supply an empty private directory here and back up that proxy’s certificates separately.
 
 ```sh
 docker compose -f compose.yaml -f compose.backup.yaml config --quiet
@@ -45,13 +45,13 @@ docker compose -f compose.yaml -f compose.backup.yaml pull
 docker compose -f compose.yaml -f compose.backup.yaml up -d --wait
 ```
 
-Use **both** Compose files for subsequent companion operations. To trigger one backup:
+Use **both** Compose files for subsequent companion operations. When also using optional HTTPS, include `-f compose.https.yaml` on every command as well. To trigger one backup:
 
 ```sh
 docker compose -f compose.yaml -f compose.backup.yaml exec -T backup python -m scripts.backup_schedule --once
 ```
 
-Archives contain a consistent `config/minifiles.sqlite3` snapshot and selected service files under `service/`, including `.env`, TLS state and source when present. The service tree is mounted read-only except for SQLite's directory, which permits WAL/SHM coordination while the source database itself is opened read-only. The companion has no media mount and does not back up uploaded files. It has no network access and never stops other services. Archives use mode `600`; set the destination directory to `700`. There is no automatic retention cleanup: plan space monitoring and retention yourself.
+Archives contain a consistent `config/minifiles.sqlite3` snapshot and selected service files under `service/`, including `.env`, TLS state and source when present. The HTTPS Compose override and Caddyfile are included when present. The service tree is mounted read-only except for SQLite's directory, which permits WAL/SHM coordination while the source database itself is opened read-only. The companion has no media mount and does not back up uploaded files. It has no network access and never stops other services. Archives use mode `600`; set the destination directory to `700`. There is no automatic retention cleanup: plan space monitoring and retention yourself.
 
 ## Restore into a separate directory
 

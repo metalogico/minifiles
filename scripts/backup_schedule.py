@@ -18,6 +18,7 @@ DESTINATION = Path("/backup")
 FILES = (
     ".env",
     "compose.yaml",
+    "compose.https.yaml",
     "compose.backup.yaml",
     "Dockerfile",
     "requirements.txt",
@@ -31,7 +32,6 @@ FILES = (
     "release.json",
     "docker",
     "tls-data",
-    "Dockerfile.https",
 )
 
 

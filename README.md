@@ -25,9 +25,9 @@ The interface is in English and designed for desktop screens at least 1100 px wi
 
 ## Install with Docker Compose
 
-Docker downloads the prebuilt GHCR images for Linux AMD64 or ARM64. No Git, PHP, Python, Composer or Node installation is required on the server. Docker Compose 2.24.4 or newer is required.
+Docker downloads the prebuilt MiniFiles image for Linux AMD64 or ARM64. No Git, PHP, Python, Composer or Node installation is required on the server. Docker Compose 2.24.4 or newer is required.
 
-The workflow publishes images when code reaches `main`. Wait for **Publish Docker images** to succeed and for the GHCR packages to be public before installing. `latest` follows main; `sha-<full commit>` selects a specific build.
+The workflow publishes images when code reaches `main`. Wait for **Publish Docker images** to succeed and for the GHCR package to be public before installing. `latest` follows main; `sha-<full commit>` selects a specific build.
 
 Download the installation files from main. The archive also contains the source, but installation does not compile it:
 
@@ -43,15 +43,15 @@ For an existing installation, follow [the transition guide](docs/UPGRADING.md) i
 ```sh
 cp .env.example .env
 chmod 600 .env
-mkdir -p local-data local-config tls-data
+mkdir -p local-data local-config
 ```
 
 Edit `.env` before starting:
 
 1. Replace `MINIFILES_USERNAME` and `MINIFILES_PASSWORD` with your own credentials.
-2. Set `MINIFILES_UID` and `MINIFILES_GID` to an identity that can write to all three directories. On Linux, `id -u` and `id -g` show your current identity. Make the new settings and TLS directories private with `chmod 700 local-config tls-data`.
+2. Set `MINIFILES_UID` and `MINIFILES_GID` to an identity that can write to both directories. On Linux, `id -u` and `id -g` show your current identity. Make the settings directory private with `chmod 700 local-config`.
 3. For an existing drive, set `MINIFILES_DATA_PATH` to its mounted path and verify its permissions. Do not change an existing collection's ownership or permissions recursively.
-4. Keep the loopback address for local use, or set the host, bind address and exact HTTPS origin for LAN access as described in the [installation guide](docs/INSTALL.md#lan-access).
+4. Keep the loopback address for local use, or set the host, bind address and exact HTTPS origin for LAN access using either an existing reverse proxy or the optional Caddy setup in the [installation guide](docs/INSTALL.md).
 
 ```sh
 docker compose config --quiet
@@ -59,11 +59,11 @@ docker compose pull
 docker compose up -d --wait
 ```
 
-The app and HTTPS proxy must use the same build. For controlled updates, pin both image references to the same `sha-<full commit>` tag.
+The base stack downloads **one image**, `ghcr.io/metalogico/minifiles`, and serves HTTP at `http://127.0.0.1:8090` for local use. For controlled updates, pin `MINIFILES_IMAGE` to a `sha-<full commit>` tag.
 
-With the example address, open `https://127.0.0.1:8090`. Caddy creates a local certificate authority on first startup. Export **only** `tls-data/caddy/pki/authorities/local/root.crt` and trust that public CA certificate on your client before signing in. Keep `root.key` and all other private TLS state on the server. See [HTTPS setup](docs/INSTALL.md#https-and-client-trust) for verification and troubleshooting.
+For LAN access, use HTTPS through your existing reverse proxy. Set `MINIFILES_ORIGIN` to the exact public HTTPS address and forward to the app's HTTP port. See [existing reverse proxies](docs/INSTALL.md#use-an-existing-reverse-proxy).
 
-The backend has no published host port. The HTTPS proxy is the only entry point. Keep MiniFiles on your LAN or a trusted private network.
+If you do not have a proxy, [optional HTTPS](docs/INSTALL.md#optional-caddy-https) uses `compose.https.yaml` with the **official Caddy image**. That option downloads two images in total; only MiniFiles is published by this project. Caddy keeps its CA in `tls-data`, and the override removes the app's direct host port. Keep MiniFiles on your LAN or a trusted private network.
 
 ## Use
 
@@ -83,7 +83,7 @@ macOS metadata named `.DS_Store` (case insensitive) or beginning with `._` is ex
 | --- | --- | --- |
 | `MINIFILES_DATA_PATH` | `/data` | Your files and private `.minifiles/uploads` temporary area |
 | `MINIFILES_CONFIG_PATH` | `/config` | SQLite sections and statistics cache |
-| `MINIFILES_TLS_PATH` | `/data` in the HTTPS proxy | Persistent CA, certificates and private keys |
+| `MINIFILES_TLS_PATH` | `/data` in the HTTPS proxy | Optional Caddy CA, certificates and private keys |
 | `.env` | Environment variables | Account credentials and deployment settings |
 
 These bind mounts survive container recreation. Sessions are held in memory, so restarting requires signing in again. Back up configuration, TLS state and the mounted files according to the [backup guide](docs/BACKUPS.md); the optional configuration companion does not copy your media.
