@@ -37,7 +37,13 @@ MINIFILES_BACKUP_PATH=/mnt/backup/minifiles
 MINIFILES_BACKUP_VOLUME_ID=your-backup-volume-marker
 ```
 
-Use actual absolute paths. `SERVICE_PATH` is this checkout/deployment directory containing `.env` and Compose files (and source, if retained). `CONFIG_PATH` and `TLS_PATH` remain those of the main stack; the companion mounts the configured settings directory as `/service/config` and TLS state as `/service/tls-data`. The host must provide `/usr/share/zoneinfo/Europe/Rome`, as mounted by the companion Compose file. The companion expects `MINIFILES_TLS_PATH` to exist. If an external proxy manages TLS, supply an empty private directory here and back up that proxy’s certificates separately.
+Download the companion configuration into the installation directory:
+
+```sh
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/compose.backup.yaml -o compose.backup.yaml
+```
+
+Use actual absolute paths. `SERVICE_PATH` is this installation directory containing `.env` and Compose files (and source, if retained). `CONFIG_PATH` and `TLS_PATH` remain those of the main stack; the companion mounts the configured settings directory as `/service/config` and TLS state as `/service/tls-data`. The host must provide `/usr/share/zoneinfo/Europe/Rome`, as mounted by the companion Compose file. The companion expects `MINIFILES_TLS_PATH` to exist. If an external proxy manages TLS, supply an empty private directory here and back up that proxy’s certificates separately.
 
 ```sh
 docker compose -f compose.yaml -f compose.backup.yaml config --quiet

@@ -1,6 +1,6 @@
 # Installation
 
-MiniFiles uses one published GHCR application image with Docker Compose. Download the main source archive using the [README](../README.md#install-with-docker-compose), then run these commands from its extracted directory. Docker Compose 2.24.4 or newer is required.
+MiniFiles uses one published GHCR application image with Docker Compose. Download `compose.yaml` and `.env.example` using the [README](../README.md#install-with-docker-compose), then run these commands from that installation directory. Docker Compose 2.24.4 or newer is required.
 
 ## Prepare the host
 
@@ -58,10 +58,12 @@ This example assumes Caddy runs on the same host and uses a local CA; keep your 
 
 `compose.https.yaml` adds the official, digest-pinned `caddy` image. There is no custom MiniFiles proxy image. Caddy runs with the configured non-root UID/GID, a read-only root filesystem and only `NET_BIND_SERVICE` in its capability bounding set, which the official binary's file capability requires. It reads `docker/Caddyfile` through a read-only bind and keeps its existing CA under `MINIFILES_TLS_PATH`.
 
-Create a private TLS directory owned by the service identity:
+Download the optional HTTPS configuration into the same installation directory and create a private TLS directory owned by the service identity:
 
 ```sh
-mkdir -p tls-data
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/compose.https.yaml -o compose.https.yaml
+mkdir -p docker tls-data
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/docker/Caddyfile -o docker/Caddyfile
 chmod 700 tls-data
 ```
 

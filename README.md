@@ -6,8 +6,6 @@ A small, self-hosted file browser for a home server. Browse a mounted drive, org
 
 ![MiniFiles website showing its animated file browser demo](docs/images/minifiles.png)
 
-The image is the original capture supplied by Sites for the project website. The website demo uses sample files; it is not connected to a live drive.
-
 ## Features
 
 - Browse folders with breadcrumbs, grid and list views, and search within the current folder.
@@ -19,32 +17,33 @@ The image is the original capture supplied by Sites for the project website. The
 - Cancel individual items, or finish the current file and discard the remaining queue.
 - View filesystem disk usage and section sizes, refreshed at startup, at the end of a queue, or manually.
 - Sign in with one configured account, protected by an HTTPS session cookie.
-- Stream large uploads to disk without loading the entire file into application memory. The upload path has previously been verified with real 20 GiB files.
+- Stream large uploads directly to disk with limited server memory use.
 
 The interface is in English and designed for desktop screens at least 1100 px wide. Names you give files and sections are preserved. Download, preview, rename, move and delete operations are outside this version's scope. Interrupted uploads restart from the beginning.
 
 ## Install with Docker Compose
 
-Docker downloads the prebuilt MiniFiles image for Linux AMD64 or ARM64. No Git, PHP, Python, Composer or Node installation is required on the server. Docker Compose 2.24.4 or newer is required.
+Docker image: **`ghcr.io/metalogico/minifiles:latest`**
 
-The workflow publishes images when code reaches `main`. Wait for **Publish Docker images** to succeed and for the GHCR package to be public before installing. `latest` follows main; `sha-<full commit>` selects a specific build.
+Requires Docker with Compose 2.24.4 or newer. Images support `linux/amd64` and `linux/arm64`.
 
-Download the installation files from main. The archive also contains the source, but installation does not compile it:
+### Download the configuration
+
+For a new installation:
 
 ```sh
 mkdir minifiles
 cd minifiles
-curl -fL "https://github.com/metalogico/minifiles/archive/refs/heads/main.tar.gz" -o source.tar.gz
-tar -xzf source.tar.gz --strip-components=1
-```
-
-For an existing installation, follow [the transition guide](docs/UPGRADING.md) instead of copying a new `.env`. Run the following commands in the extracted directory.
-
-```sh
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/compose.yaml -o compose.yaml
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/.env.example -o .env.example
 cp .env.example .env
 chmod 600 .env
 mkdir -p local-data local-config
 ```
+
+Already installed? Keep your `.env` and follow [Updating](#data-and-updates).
+
+### Configure and start
 
 Edit `.env` before starting:
 
@@ -59,11 +58,11 @@ docker compose pull
 docker compose up -d --wait
 ```
 
-The base stack downloads **one image**, `ghcr.io/metalogico/minifiles`, and serves HTTP at `http://127.0.0.1:8090` for local use. For controlled updates, pin `MINIFILES_IMAGE` to a `sha-<full commit>` tag.
+Open `http://127.0.0.1:8090` on the server and sign in.
 
 For LAN access, use HTTPS through your existing reverse proxy. Set `MINIFILES_ORIGIN` to the exact public HTTPS address and forward to the app's HTTP port. See [existing reverse proxies](docs/INSTALL.md#use-an-existing-reverse-proxy).
 
-If you do not have a proxy, [optional HTTPS](docs/INSTALL.md#optional-caddy-https) uses `compose.https.yaml` with the **official Caddy image**. That option downloads two images in total; only MiniFiles is published by this project. Caddy keeps its CA in `tls-data`, and the override removes the app's direct host port. Keep MiniFiles on your LAN or a trusted private network.
+For HTTPS without an existing proxy, follow the [Caddy setup](docs/INSTALL.md#optional-caddy-https). It adds the official Caddy image and stores its certificates in `tls-data`.
 
 ## Use
 
@@ -88,20 +87,22 @@ macOS metadata named `.DS_Store` (case insensitive) or beginning with `._` is ex
 
 These bind mounts survive container recreation. Sessions are held in memory, so restarting requires signing in again. Back up configuration, TLS state and the mounted files according to the [backup guide](docs/BACKUPS.md); the optional configuration companion does not copy your media.
 
-For updates, let uploads finish, back up settings, TLS state and media as appropriate, then follow [UPGRADING.md](docs/UPGRADING.md). Keep the same `.env`, UID/GID and persistent paths. Released schema changes use incremental migrations; a downgrade may require restoring a matching backup.
+Let uploads finish and back up settings, certificates and media before updating:
 
-## Implementation and limits
+```sh
+docker compose pull
+docker compose stop
+docker compose up -d --wait
+```
 
-FastAPI and Uvicorn serve the API and compiled Vue 3 frontend from one origin. Settings use SQLite from Python's standard library. The frontend uses TypeScript, Vite and Tailwind CSS. The multi-stage Dockerfile keeps Node out of the runtime image.
+Keep the same `.env`, Compose project, data and override files. If you pinned an image version, change its reference in `.env` before pulling. See [UPGRADING.md](docs/UPGRADING.md) for recovery and migration details.
 
-Run exactly one application worker and one MiniFiles instance per data root. Directory descriptors and no-follow checks confine paths; atomic hard-link publication refuses occupied names. The data mount is writable: API restrictions do not make files immutable against a compromised application process. Space reservations also cannot prevent another program from filling the disk. Uploaded files use mode `600` and the configured UID/GID, which matters when other services need to read them.
+Run one MiniFiles instance per data directory. Uploaded files use mode `600` and the configured UID/GID; other services need compatible permissions to read them.
 
-Development commands, the verification record and image provenance are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [docs/PUBLIC_RELEASE.md](docs/PUBLIC_RELEASE.md) and [docs/images/README.md](docs/images/README.md).
+## Development
+
+See [Development](docs/DEVELOPMENT.md) for source builds and tests, and [Releasing](docs/RELEASING.md) for publishing images.
 
 ## License
 
 [MIT](LICENSE).
-
-## Releases and source builds
-
-See [RELEASING.md](docs/RELEASING.md) for local checks, GHCR publication and schema policy. For local Docker builds, use `docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait` from a source checkout with a separate development environment and data. See the same guide before adding optional backup overrides to a source build.
