@@ -1,62 +1,70 @@
 # Building and publishing MiniFiles
 
-## Branches and releases
+## Workflow
 
-- `develop`: changes, reviewed source builds and CI. No image publication.
-- `main`: reviewed release commits. No automatic deployment or image publication on push.
-- A stable Git tag such as `v1.0.0`, on a commit contained in `main`, plus a **published GitHub Release** triggers `release.yml`. A tag push by itself does not publish images. Drafts and prereleases do not publish.
+Tests run **locally**, before merging. GitHub Actions only builds and publishes Docker images when a push updates `main`, including a merged pull request. A direct push to main also triggers publication. Pushes to develop, pull requests, Git tags and GitHub Releases do not start any workflow. Use branch protection if main should accept only reviewed merges; remove any required checks that referred to the retired CI workflow.
 
-Before tagging, merge the verified changes from develop into main. Update the planned image version in Compose, `.env.example` and installation examples for the new release. The release packager also substitutes the tag's version into image references in the downloadable bundle.
+`.github/workflows/publish.yml` builds `linux/amd64` and `linux/arm64` and publishes:
 
-Create the tag and publish its GitHub Release only after CI is green. The release workflow re-runs the checks for that tag, builds and tests containers on native AMD64/ARM64 runners, then builds the multi-platform image with Buildx and publishes it to `ghcr.io/metalogico/minifiles:1.0.0` (using the actual release version). It also publishes `ghcr.io/metalogico/minifiles-https` at the same version.
+- `ghcr.io/metalogico/minifiles:latest`: the current published main build.
+- `ghcr.io/metalogico/minifiles:sha-<full commit>`: the specific source commit, useful for pinned installations and recovery.
 
-The final job attaches `minifiles-VERSION-install.tar.gz` and `SHA256SUMS` to the release. These contain Compose, `.env.example`, public docs and any required Caddy config; no private environment, runtime data, dependencies or source checkout is included. Wait for **all jobs** to succeed before announcing availability.
+MiniFiles also publishes `ghcr.io/metalogico/minifiles-https` with those same tags. Pin the app and proxy to the same commit. The SHA is the commit that reaches main, which can differ from the develop commit when a merge commit is created. The image revision label records it. A rerun for the same commit can rebuild dependencies and change the digest; pin the digest if exact image bytes must be retained.
 
-Only exact versions are published; no moving `latest`, major, minor or develop tags are maintained. Never move a release tag or overwrite an announced image version. If a released build needs correction, issue a new patch version. For a partially failed initial run, rerun only failed jobs where possible; rebuilding a package can change its digest even from the same source. An exact digest can also be used in the image environment variable when stronger pinning is needed.
+There are no test jobs, automatic commits, Git tags, GitHub Releases or release attachments. A manually created `v1.0.0` Git tag can mark a milestone, but it does **not** create a Docker `1.0.0` tag. Build steps still install production dependencies and compile the frontend: those are required to construct the images, not a hosted test suite.
 
-## GitHub setup, once per repository
+## GitHub setup
 
-1. Enable GitHub Actions and allow the pinned actions used in these workflows. CI needs read access to contents; only the publish job gets `packages: write`, and only the installation upload job gets `contents: write`.
-2. Authentication uses the repository's `GITHUB_TOKEN`; no personal access token or Docker Hub secret is required. If a package with the same name already exists, grant this repository Actions write access to that package.
-3. After the first successful publication, open each GHCR package's settings and set its visibility to **Public**. A public source repository does not by itself guarantee public package visibility. MiniFiles has two packages; both must be public.
-4. Verify an anonymous pull using an empty Docker credential config, and inspect the manifest for both `linux/amd64` and `linux/arm64`. Then test the release installation bundle on a disposable host/stack. GHCR permission checks and the first hosted run cannot be validated by a local preparation alone.
+Enable Actions and allow the pinned actions in `publish.yml`. The workflow uses `GITHUB_TOKEN` with `contents: read` and `packages: write`; no personal access token, Docker Hub credentials or write access to Git contents is required. Existing packages must grant this repository Actions write access.
 
-Actions are pinned to verified commit SHAs. Review updates explicitly. Optional branch protection can require `CI / tests` and both container jobs before merging into main. Do not let automated dependency or image updates bypass the migration checks.
+After first publication, set each GHCR package to **Public** in its package settings (both packages for MiniFiles). Public source visibility does not automatically make a container package public. Verify anonymous pulls and both architectures. Wait for the complete workflow to succeed before updating any installation.
 
-## CI and local verification
+## Local checks before merging
 
-`ci.yml` runs on pushes to main/develop, pull requests and manual dispatch. It runs the application tests and frontend build, checks frozen migrations, builds the actual Dockerfiles on native AMD64 and ARM64, and starts the image-only Compose in an isolated project. The smoke check verifies HTTP (CA-verified HTTPS for MiniFiles), persisted database/file content after recreation, and the unchanged MiniFiles CA. It removes only its own disposable containers and volumes.
-
-For a local smoke check, build `minifiles:ci` from the Dockerfile and `minifiles-https:ci` from `Dockerfile.https`, then run:
+Use a development checkout with its own environment and isolated test data. Install the documented development dependencies first. Fetch origin/main and stable Git tags before running the migration guard, so it can protect already-released migrations too.
 
 ```sh
 python3 .github/scripts/check-migrations.py
+.venv/bin/python -m pytest tests -q
+.venv/bin/ruff check backend scripts tests
+.venv/bin/ruff format --check backend scripts tests
+cd frontend
+npm ci
+npm test
+npm run format:check
+npm run build
+cd ..
+```
+
+Build and exercise the image-only installation locally:
+
+```sh
+docker build -t minifiles:ci .
+docker build -f Dockerfile.https -t minifiles-https:ci .
 python3 .github/scripts/smoke-install.py
 ```
 
-The scripts require Python 3, Docker Compose and curl. Release packaging is available locally with `RELEASE_VERSION=1.0.0 python3 .github/scripts/package-release.py`; output goes to ignored `dist-release/`. Packaging includes the release/upgrade guides explicitly and other public documentation from Git's tracked-file list. Include new public documentation in the release commit.
+The smoke check creates its own project and temporary configuration, checks the web response and data persistence after recreation, and removes only its temporary stack. Repeat the build with `--platform linux/amd64` or `--platform linux/arm64` and run the corresponding image when checking another architecture. Never point tests at production data.
 
-## Source builds
-
-From a source checkout with a dedicated development `.env` and separate storage:
+## Source builds for development
 
 ```sh
 docker compose -f compose.yaml -f compose.build.yaml build
 docker compose -f compose.yaml -f compose.build.yaml up -d --wait
 ```
 
-Keep both `-f` options for subsequent commands. This override uses `minifiles:dev` and `minifiles-https:dev`, independently of the production image variable. The app use the same build. For an optional backup companion, provide a final override setting its image to the same development image; production backup companions use the published app image automatically. Do not mix image versions across services sharing a database.
+Use a dedicated development environment and storage. Keep both `-f` options for subsequent commands. This override uses `minifiles:dev` independently of the production image variable. For optional backup companions, add a final override selecting the same development app image. Do not mix builds across services sharing a database.
 
-## Schema policy from v1.0.0
+## Schema policy from the first public image
 
-The first public release freezes the current schema. This replaces the earlier development policy of editing original migrations. Add new incremental changes in `backend/migrations/vNNN_name.py`, appending its function to `MIGRATIONS` in order. The runner uses a transaction and SQLite `user_version`; version 1 keeps the existing sections/cache schema. Never use `executescript` in a migration, as it can commit the transaction.
+The first public image freezes the current schema. This replaces the earlier development policy of editing original migrations. Add new incremental changes in `backend/migrations/vNNN_name.py`, appending its function to `MIGRATIONS` in order. The runner uses a transaction and SQLite `user_version`; version 1 keeps the existing sections/cache schema. Never use `executescript` in a migration, as it can commit the transaction.
 
-The CI guard checks the initial v1 hashes and all migration files from stable Git tags. Do not update the hashes to bypass a failure. A new migration needs tests for a fresh database and an upgrade from the previous release with representative existing records/files. Check rollback after a failure and ensure existing values are preserved. Schema downgrades are not automatic; document any required restore procedure in release notes.
+The local migration guard checks the initial v1 hashes and all migration files from origin/main and stable Git tags (fetch them before checking). Do not update the hashes to bypass a failure. A new migration needs tests for a fresh database and an upgrade from the previous release with representative existing records/files. Check rollback after a failure and ensure existing values are preserved. Schema downgrades are not automatic; document any required restore procedure in release notes.
 
-See [UPGRADING.md](UPGRADING.md) for the first transition and subsequent updates. Image publication and server deployment are separate operations; these workflows never connect to or update a server.
+See [UPGRADING.md](UPGRADING.md) for the first transition and subsequent updates. Image publication and server deployment are separate operations; the workflow never connects to or updates a server.
 
 ## Optional operational companions
 
-The normal installation bundle is self-contained. Backup overrides are opt-in and retain their documented external-disk, identity-marker and permission requirements.
+The main source archive includes the standard installation files. Backup overrides are opt-in and retain their documented external-disk, identity-marker and permission requirements.
 
 References: [GitHub container publication](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images), [Docker multi-platform Actions builds](https://docs.docker.com/build/ci/github-actions/multi-platform/).

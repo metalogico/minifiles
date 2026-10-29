@@ -1,6 +1,6 @@
 # Installation
 
-MiniFiles uses published GHCR images with Docker Compose. Download the versioned installation bundle using the [README](../README.md#install-with-docker-compose), then run these commands from its extracted directory. Docker Compose 2.24.4 or newer is required.
+MiniFiles uses published GHCR images with Docker Compose. Download the main source archive using the [README](../README.md#install-with-docker-compose), then run these commands from its extracted directory. Docker Compose 2.24.4 or newer is required.
 
 ## Prepare the host
 
@@ -48,7 +48,7 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-`config --quiet` checks interpolation without printing credentials. It does not check host permissions, TLS trust or application startup. `pull` downloads the published application and HTTPS proxy; both must use the same release version. The Caddy configuration is included in the proxy image. The runtime uses a single Uvicorn worker, a read-only application filesystem and writable bind mounts for persistent state.
+`config --quiet` checks interpolation without printing credentials. It does not check host permissions, TLS trust or application startup. `pull` downloads the published application and HTTPS proxy; both must use the same published main commit. The Caddy configuration is included in the proxy image. The runtime uses a single Uvicorn worker, a read-only application filesystem and writable bind mounts for persistent state.
 
 The app's Docker health check calls `/health`; Compose starts the proxy after the backend is healthy. The proxy has no Docker health check, so also verify HTTPS as below. If startup fails, inspect only this stack with `docker compose logs --tail=50`. Missing paths, incorrect ownership, an existing instance on the data volume, insufficient private-directory permissions and unchanged password placeholders prevent startup.
 
@@ -87,7 +87,7 @@ docker compose up -d --force-recreate --wait
 | `MINIFILES_TLS_HOST` | `127.0.0.1`; certificate hostname/IP |
 | `MINIFILES_BIND_IP`, `MINIFILES_PORT` | `127.0.0.1`, `8090`; host listener |
 | `MINIFILES_UID`, `MINIFILES_GID` | `1000`, `1000`; numeric process identity |
-| `MINIFILES_IMAGE`, `MINIFILES_HTTPS_IMAGE` | Pinned GHCR app and proxy image references |
+| `MINIFILES_IMAGE`, `MINIFILES_HTTPS_IMAGE` | GHCR app and proxy references: latest or matching sha-COMMIT tags |
 | `MINIFILES_DATA_PATH` | `./local-data`; mounted at `/data` in the app |
 | `MINIFILES_CONFIG_PATH` | `./local-config`; mounted at `/config` |
 | `MINIFILES_TLS_PATH` | `./tls-data`; mounted at `/data` in the proxy |

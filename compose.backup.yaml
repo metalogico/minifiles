@@ -1,7 +1,7 @@
 # Optional, production-only companion. Uses the same image as the application.
 services:
   backup:
-    image: ${MINIFILES_IMAGE:-ghcr.io/metalogico/minifiles:1.0.0}
+    image: ${MINIFILES_IMAGE:-ghcr.io/metalogico/minifiles:latest}
     command: [python, -m, scripts.backup_schedule]
     restart: unless-stopped
     user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
