@@ -1,0 +1,10 @@
+# Source builds for development only. Add this file after compose.yaml.
+services:
+  minifiles:
+    build: .
+    image: ${MINIFILES_BUILD_IMAGE:-minifiles:dev}
+  https:
+    build:
+      context: .
+      dockerfile: Dockerfile.https
+    image: ${MINIFILES_HTTPS_BUILD_IMAGE:-minifiles-https:dev}

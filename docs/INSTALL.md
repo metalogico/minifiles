@@ -1,6 +1,6 @@
 # Installation
 
-MiniFiles is built from source with Docker Compose. There is no required registry image. Run the commands from the repository root with Docker Engine or Docker Desktop running and the Compose v2 plugin installed.
+MiniFiles uses published GHCR images with Docker Compose. Download the versioned installation bundle using the [README](../README.md#install-with-docker-compose), then run these commands from its extracted directory. Docker Compose 2.24.4 or newer is required.
 
 ## Prepare the host
 
@@ -10,8 +10,6 @@ MiniFiles is built from source with Docker Compose. There is no required registr
 - Reserve an available TCP port, 8090 by default. Only the HTTPS proxy publishes a port.
 
 ```sh
-git clone https://github.com/metalogico/minifiles.git
-cd minifiles
 cp .env.example .env
 chmod 600 .env
 mkdir -p local-data local-config tls-data
@@ -41,15 +39,16 @@ MINIFILES_PORT=8090
 
 The supplied Caddy configuration uses its own local CA, including for DNS hostnames. It does not obtain a public certificate. Keep the service on a trusted LAN or private network; public internet exposure is outside the supplied deployment configuration.
 
-## Build and start
+## Pull and start
 
 ```sh
 docker compose config --quiet
-docker compose up -d --build --wait
+docker compose pull
+docker compose up -d --wait
 docker compose ps
 ```
 
-`config --quiet` checks interpolation without printing credentials. It does not check host permissions, TLS trust or application startup. `up --build` builds the Python/Vue application and Caddy proxy from the Dockerfiles. The first build downloads base images and packages; exact image digests and package versions are stored in the repository. The runtime uses a single Uvicorn worker, a read-only application filesystem and writable bind mounts for persistent state.
+`config --quiet` checks interpolation without printing credentials. It does not check host permissions, TLS trust or application startup. `pull` downloads the published application and HTTPS proxy; both must use the same release version. The Caddy configuration is included in the proxy image. The runtime uses a single Uvicorn worker, a read-only application filesystem and writable bind mounts for persistent state.
 
 The app's Docker health check calls `/health`; Compose starts the proxy after the backend is healthy. The proxy has no Docker health check, so also verify HTTPS as below. If startup fails, inspect only this stack with `docker compose logs --tail=50`. Missing paths, incorrect ownership, an existing instance on the data volume, insufficient private-directory permissions and unchanged password placeholders prevent startup.
 
@@ -88,7 +87,7 @@ docker compose up -d --force-recreate --wait
 | `MINIFILES_TLS_HOST` | `127.0.0.1`; certificate hostname/IP |
 | `MINIFILES_BIND_IP`, `MINIFILES_PORT` | `127.0.0.1`, `8090`; host listener |
 | `MINIFILES_UID`, `MINIFILES_GID` | `1000`, `1000`; numeric process identity |
-| `MINIFILES_IMAGE`, `MINIFILES_HTTPS_IMAGE` | Local build tags, not image download requirements |
+| `MINIFILES_IMAGE`, `MINIFILES_HTTPS_IMAGE` | Pinned GHCR app and proxy image references |
 | `MINIFILES_DATA_PATH` | `./local-data`; mounted at `/data` in the app |
 | `MINIFILES_CONFIG_PATH` | `./local-config`; mounted at `/config` |
 | `MINIFILES_TLS_PATH` | `./tls-data`; mounted at `/data` in the proxy |
@@ -102,21 +101,6 @@ Do not increase the worker count or scale the app service. The exclusive data-ro
 
 ## Updates and recovery
 
-Let uploads finish and make the backups described in [BACKUPS.md](BACKUPS.md). Record the previous source revision and local image tags before rebuilding if you need to recover that version. Updating an installation with locally modified source requires reviewing those changes first.
+Let uploads finish and make the backups described in [BACKUPS.md](BACKUPS.md). Follow [UPGRADING.md](UPGRADING.md) for version selection, container replacement and the first transition from source builds. Keep the same `.env`, data/settings/TLS paths and numeric identity. Verify the CA, sign in and check sections/files after the update.
 
-```sh
-git pull --ff-only
-docker compose build --pull
-docker compose up -d --wait
-docker compose ps
-```
-
-Use the same `.env` and persistent paths. Check CA-verified `/health`, sign in, confirm sections and browse the existing files. Recreating a container preserves bind mounts and invalidates old sessions. This development version does not promise schema migration or downgrade compatibility: when recovering an older version, restore the matching configuration snapshot into a separate directory and point that version at it.
-
-To stop the stack while preserving data:
-
-```sh
-docker compose stop
-```
-
-`docker compose down` removes this stack's containers and network, while the bind directories remain. Never delete the data, settings or TLS directories as an update step. The application does not provide a file-deletion API.
+Stop the stack while preserving data with `docker compose stop`. Do not delete bind directories during an update. Source builds use the separate `compose.build.yaml` override described in [RELEASING.md](RELEASING.md).

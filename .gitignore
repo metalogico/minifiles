@@ -34,3 +34,6 @@ docs/VERIFICHE.md
 docs/verification/
 landing/VERIFICATION.md
 landing/
+
+# Local release packaging output
+dist-release/

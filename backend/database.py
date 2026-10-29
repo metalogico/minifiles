@@ -3,24 +3,15 @@ import sqlite3
 import time
 from contextlib import contextmanager
 
+from backend.migrations import migrate
+
 
 class Database:
     def __init__(self, root):
         root.mkdir(parents=True, exist_ok=True)
         self.path = root / "minifiles.sqlite3"
         with self.connect() as db:
-            db.executescript("""
-                PRAGMA journal_mode=WAL;
-                CREATE TABLE IF NOT EXISTS sections (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    path TEXT NOT NULL,
-                    color TEXT NOT NULL,
-                    position INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                PRAGMA user_version=1;
-            """)
+            migrate(db)
 
     @contextmanager
     def connect(self):

@@ -1,8 +1,7 @@
 name: minifiles
 services:
   minifiles:
-    build: .
-    image: ${MINIFILES_IMAGE:-minifiles:local}
+    image: ${MINIFILES_IMAGE:-ghcr.io/metalogico/minifiles:1.0.0}
     restart: unless-stopped
     user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
     environment:
@@ -43,10 +42,7 @@ services:
         max-file: '3'
 
   https:
-    build:
-      context: .
-      dockerfile: Dockerfile.https
-    image: ${MINIFILES_HTTPS_IMAGE:-minifiles-https:local}
+    image: ${MINIFILES_HTTPS_IMAGE:-ghcr.io/metalogico/minifiles-https:1.0.0}
     restart: unless-stopped
     user: "${MINIFILES_UID:-1000}:${MINIFILES_GID:-1000}"
     environment:
@@ -54,7 +50,6 @@ services:
     ports:
       - "${MINIFILES_BIND_IP:-127.0.0.1}:${MINIFILES_PORT:-8090}:8443"
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - type: bind
         source: ${MINIFILES_TLS_PATH:-./tls-data}
         target: /data

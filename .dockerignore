@@ -26,3 +26,7 @@ release.json
 *.pem
 .DS_Store
 **/.openai
+
+# Local release packaging output
+dist-release/
+.github/

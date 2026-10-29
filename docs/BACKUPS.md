@@ -27,7 +27,7 @@ Replace the example date and destination. Back up `.env` and `tls-data` privatel
 
 ## Optional scheduled companion
 
-`compose.backup.yaml` adds a MiniFiles-only backup container. It uses the locally built application image and runs at **08:00 and 20:00 Europe/Rome**, catches up on the most recent missed slot at startup, retries failures after 15 minutes, and reports unhealthy after 14 hours without success. The schedule and time zone are currently fixed in the script.
+`compose.backup.yaml` adds a MiniFiles-only backup container. It uses the same published application image as the main service and runs at **08:00 and 20:00 Europe/Rome**, catches up on the most recent missed slot at startup, retries failures after 15 minutes, and reports unhealthy after 14 hours without success. The schedule and time zone are currently fixed in the script.
 
 The destination must be on a disk separate from the service directory. The script checks both filesystem identity and a `.volume-id` marker before writing. On Linux, first confirm that your backup disk is mounted, create a private directory on it owned by the service UID/GID, then write a marker value you choose into `.volume-id`. Set the same value in `.env`:
 
@@ -37,11 +37,12 @@ MINIFILES_BACKUP_PATH=/mnt/backup/minifiles
 MINIFILES_BACKUP_VOLUME_ID=your-backup-volume-marker
 ```
 
-Use actual absolute paths. `SERVICE_PATH` is this checkout/deployment directory containing `.env`, source and Compose files. `CONFIG_PATH` and `TLS_PATH` remain those of the main stack; the companion mounts the configured settings directory as `/service/config` and TLS state as `/service/tls-data`. The host must provide `/usr/share/zoneinfo/Europe/Rome`, as mounted by the companion Compose file.
+Use actual absolute paths. `SERVICE_PATH` is this checkout/deployment directory containing `.env` and Compose files (and source, if retained). `CONFIG_PATH` and `TLS_PATH` remain those of the main stack; the companion mounts the configured settings directory as `/service/config` and TLS state as `/service/tls-data`. The host must provide `/usr/share/zoneinfo/Europe/Rome`, as mounted by the companion Compose file.
 
 ```sh
 docker compose -f compose.yaml -f compose.backup.yaml config --quiet
-docker compose -f compose.yaml -f compose.backup.yaml up -d --build --wait
+docker compose -f compose.yaml -f compose.backup.yaml pull
+docker compose -f compose.yaml -f compose.backup.yaml up -d --wait
 ```
 
 Use **both** Compose files for subsequent companion operations. To trigger one backup:
@@ -50,7 +51,7 @@ Use **both** Compose files for subsequent companion operations. To trigger one b
 docker compose -f compose.yaml -f compose.backup.yaml exec -T backup python -m scripts.backup_schedule --once
 ```
 
-Archives contain a consistent `config/minifiles.sqlite3` snapshot and selected service files under `service/`, including `.env`, source and TLS state. The service tree is mounted read-only except for SQLite's directory, which permits WAL/SHM coordination while the source database itself is opened read-only. The companion has no media mount and does not back up uploaded files. It has no network access and never stops other services. Archives use mode `600`; set the destination directory to `700`. There is no automatic retention cleanup: plan space monitoring and retention yourself.
+Archives contain a consistent `config/minifiles.sqlite3` snapshot and selected service files under `service/`, including `.env`, TLS state and source when present. The service tree is mounted read-only except for SQLite's directory, which permits WAL/SHM coordination while the source database itself is opened read-only. The companion has no media mount and does not back up uploaded files. It has no network access and never stops other services. Archives use mode `600`; set the destination directory to `700`. There is no automatic retention cleanup: plan space monitoring and retention yourself.
 
 ## Restore into a separate directory
 
