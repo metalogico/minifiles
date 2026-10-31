@@ -13,7 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && groupadd --gid 1000 minifiles \
     && useradd --uid 1000 --gid minifiles --no-create-home minifiles
 COPY backend/ ./backend/
-COPY scripts/backup*.py ./scripts/
 COPY --from=frontend /build/dist ./frontend/dist
 USER 1000:1000
 EXPOSE 8000

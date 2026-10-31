@@ -28,3 +28,4 @@ release.json
 **/.openai
 
 .github/
+.agents/

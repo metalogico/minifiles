@@ -16,7 +16,7 @@ def migrate(db: sqlite3.Connection) -> None:
         if version > len(MIGRATIONS):
             raise RuntimeError(
                 "Database schema is newer than this MiniFiles version. "
-                "Use the matching image or restore a matching backup."
+                "Use an image that supports this database schema."
             )
         for index in range(version, len(MIGRATIONS)):
             MIGRATIONS[index](db)

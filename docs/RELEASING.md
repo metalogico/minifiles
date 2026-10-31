@@ -55,7 +55,7 @@ docker compose -f compose.yaml -f compose.build.yaml up -d --wait
 
 For HTTPS source builds, use all three files: `-f compose.yaml -f compose.build.yaml -f compose.https.yaml`. Caddy is still downloaded from its official image.
 
-Use a dedicated development environment and storage. Keep both `-f` options for subsequent commands. This override uses `minifiles:dev` independently of the production image variable. For optional backup companions, add a final override selecting the same development app image. Do not mix builds across services sharing a database.
+Use a dedicated development environment and storage. Keep both `-f` options for subsequent commands. This override uses `minifiles:dev` independently of the production image variable.
 
 ## Schema policy from the first public image
 
@@ -64,9 +64,5 @@ The first public image freezes the current schema. This replaces the earlier dev
 The local migration guard checks the initial v1 hashes and all migration files from origin/main and stable Git tags (fetch them before checking). Do not update the hashes to bypass a failure. A new migration needs tests for a fresh database and an upgrade from the previous release with representative existing records/files. Check rollback after a failure and ensure existing values are preserved. Schema downgrades are not automatic; document any required restore procedure in release notes.
 
 See [UPGRADING.md](UPGRADING.md) for the first transition and subsequent updates. Image publication and server deployment are separate operations; the workflow never connects to or updates a server.
-
-## Optional operational companions
-
-The main source archive includes the standard installation files. Backup overrides are opt-in and retain their documented external-disk, identity-marker and permission requirements.
 
 References: [GitHub container publication](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images), [Docker multi-platform Actions builds](https://docs.docker.com/build/ci/github-actions/multi-platform/).

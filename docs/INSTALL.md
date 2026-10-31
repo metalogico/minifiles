@@ -41,7 +41,7 @@ Open `http://127.0.0.1:8090`. Only the MiniFiles image is downloaded. The app he
 
 Keep `MINIFILES_BIND_IP=127.0.0.1` when the reverse proxy runs on the host. Set `MINIFILES_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://files.home.arpa`. Forward all paths to `http://127.0.0.1:8090`, preserving the Host and Origin headers. Recreate MiniFiles after editing `.env`.
 
-If the proxy runs in another container, its localhost is not the Docker host. Connect it and MiniFiles to a shared Docker network with an override and use `minifiles:8000` as the upstream; remove the host port with `ports: !reset []` if it is not needed. Do not expose the plain HTTP listener on an untrusted network. Configure the proxy for streaming request bodies, sufficient upload limits and timeouts for large files. TLS and certificate backups belong to that proxy.
+If the proxy runs in another container, its localhost is not the Docker host. Connect it and MiniFiles to a shared Docker network with an override and use `minifiles:8000` as the upstream; remove the host port with `ports: !reset []` if it is not needed. Do not expose the plain HTTP listener on an untrusted network. Configure the proxy for streaming request bodies, sufficient upload limits and timeouts for large files. TLS and certificate management belong to that proxy.
 
 For an existing Caddy installation, the relevant upstream directive is:
 
@@ -84,7 +84,7 @@ docker compose -f compose.yaml -f compose.https.yaml pull
 docker compose -f compose.yaml -f compose.https.yaml up -d --wait
 ```
 
-**Keep both `-f` options for every subsequent command**, including updates and backups. The merged configuration publishes only Caddy's HTTPS port; the application's HTTP port is removed. The proxy starts after the app is healthy; verify its HTTPS response as described below. `config --quiet` validates configuration without printing credentials, but does not verify host permissions or TLS trust.
+**Keep both `-f` options for every subsequent command**, including updates. The merged configuration publishes only Caddy's HTTPS port; the application's HTTP port is removed. The proxy starts after the app is healthy; verify its HTTPS response as described below. `config --quiet` validates configuration without printing credentials, but does not verify host permissions or TLS trust.
 
 ## HTTPS and client trust
 
@@ -135,6 +135,6 @@ Do not increase the worker count or scale the app service. The exclusive data-ro
 
 ## Updates and recovery
 
-Let uploads finish and make the backups described in [BACKUPS.md](BACKUPS.md). Follow [UPGRADING.md](UPGRADING.md) for version selection, container replacement and the first transition from source builds. Keep the same `.env`, data/settings/TLS paths and numeric identity. Verify the CA, sign in and check sections/files after the update.
+Let uploads finish before updating. Data protection and recovery are managed externally. Follow [UPGRADING.md](UPGRADING.md) for version selection, container replacement and the first transition from source builds. Keep the same `.env`, data/settings/TLS paths and numeric identity. Verify the CA, sign in and check sections/files after the update.
 
 Stop the stack while preserving data with `docker compose stop`. Do not delete bind directories during an update. Source builds use the separate `compose.build.yaml` override described in [RELEASING.md](RELEASING.md).

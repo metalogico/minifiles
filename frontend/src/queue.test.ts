@@ -85,7 +85,7 @@ describe('serial queue lifecycle', () => {
     expect(queue.items).toHaveLength(0)
   })
 
-  it('shows all files immediately, removes successes, serializes uploads and emits one end event including appended files', async () => {
+  it('enqueues all files immediately, removes successes, serializes uploads and emits one end event including appended files', async () => {
     const { queue, events } = setup()
     queue.add(selectionFromFiles(Array.from({ length: 10 }, (_, i) => file(`file-${i}`))), 'Books')
     expect(queue.items).toHaveLength(10)
@@ -107,7 +107,7 @@ describe('serial queue lifecycle', () => {
     expect(queue.summary).toMatchObject({ total: 11, processed: 11, done: 11, state: 'finished' })
   })
 
-  it('keeps the last current file visible through ticket cleanup and preserves totals if files are added then', async () => {
+  it('retains the current transfer through ticket cleanup and preserves totals if files are added then', async () => {
     const { queue, events } = setup()
     const cleanup = deferred<void>()
     mockApi.mockImplementation(async (_path, method) =>
@@ -137,10 +137,7 @@ describe('serial queue lifecycle', () => {
     mockApi.mockRejectedValueOnce(new ApiError(409, { kind: 'duplicate' }))
     queue.add(selectionFromFiles([file('same'), file('other')]), 'Books')
     await flush()
-    expect(queue.items[0]).toMatchObject({
-      status: 'skipped',
-      message: 'Skipped: file already exists',
-    })
+    expect(queue.items[0]).toMatchObject({ status: 'skipped' })
     expect(queue.summary.current?.name).toBe('other')
     for (const call of mockApi.mock.calls.filter((c) => c[0] === '/uploads'))
       expect(call[2]).not.toHaveProperty('overwrite_version')
@@ -160,10 +157,7 @@ describe('serial queue lifecycle', () => {
     xhr.responseText = '{"detail":{"kind":"duplicate"}}'
     xhr.finish()
     await flush()
-    expect(queue.items[0]).toMatchObject({
-      status: 'skipped',
-      message: 'Skipped: file already exists',
-    })
+    expect(queue.items[0]).toMatchObject({ status: 'skipped' })
     expect(queue.summary.current?.name).toBe('other')
     FakeXHR.pending[0]!.finish()
     await flush()
@@ -200,7 +194,6 @@ describe('serial queue lifecycle', () => {
       done: 1,
       error: 1,
       state: 'finished',
-      label: 'Finished with errors',
     })
     expect(events.drained).toHaveBeenCalledTimes(1)
   })
@@ -260,15 +253,12 @@ describe('serial queue lifecycle', () => {
       expect(FakeXHR.active).toBe(1)
       expect(queue.summary).toMatchObject({
         state: 'cancelling',
-        label: 'Finishing current file…',
         remaining: 1,
         total: 3,
       })
       expect(queue.accepting).toBe(false)
       expect(events.drained).not.toHaveBeenCalled()
-      expect(() => queue.add(selectionFromFiles([file('new')]), 'Books')).toThrow(
-        'Wait for the current file',
-      )
+      expect(() => queue.add(selectionFromFiles([file('new')]), 'Books')).toThrow()
       queue.cancelAll()
       queue.cancel(queue.items[0]!)
       expect(FakeXHR.active).toBe(1)
@@ -283,7 +273,7 @@ describe('serial queue lifecycle', () => {
     },
   )
 
-  it('retains the error in the overview if the final upload fails during cancellation', async () => {
+  it('preserves the server error if the final upload fails during cancellation', async () => {
     const { queue, events } = setup()
     queue.add(selectionFromFiles([file('current'), file('next')]), 'Books')
     await flush()

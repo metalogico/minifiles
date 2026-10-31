@@ -35,7 +35,7 @@ for name, path, color in [
     ("TV Shows", "TV Shows", "purple"),
     ("ROMs", "ROMs", "green"),
     ("Downloads", "Downloads", "yellow"),
-    ("Backups", "Backups", "slate"),
+    ("Photos", "Photos", "slate"),
 ]:
     if path not in existing:
         api("/sections", {"name": name, "path": path, "color": color, "create_folder": True})

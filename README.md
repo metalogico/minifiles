@@ -2,7 +2,7 @@
 
 A small, self-hosted file browser for a home server. Browse a mounted drive, organise folder shortcuts, and upload files from a desktop browser. MiniFiles runs in Docker and writes uploads directly to the disk you mount.
 
-[Project website](https://minifiles.metalogico.dev) · [Installation](docs/INSTALL.md) · [Backup and restore](docs/BACKUPS.md) · [Development](docs/DEVELOPMENT.md)
+[Project website](https://minifiles.metalogico.dev) · [Installation](docs/INSTALL.md) · [Development](docs/DEVELOPMENT.md)
 
 ![MiniFiles website showing its animated file browser demo](docs/images/minifiles.png)
 
@@ -85,9 +85,9 @@ macOS metadata named `.DS_Store` (case insensitive) or beginning with `._` is ex
 | `MINIFILES_TLS_PATH` | `/data` in the HTTPS proxy | Optional Caddy CA, certificates and private keys |
 | `.env` | Environment variables | Account credentials and deployment settings |
 
-These bind mounts survive container recreation. Sessions are held in memory, so restarting requires signing in again. Back up configuration, TLS state and the mounted files according to the [backup guide](docs/BACKUPS.md); the optional configuration companion does not copy your media.
+These bind mounts survive container recreation. Sessions are held in memory, so restarting requires signing in again. Data protection and recovery are managed outside MiniFiles.
 
-Let uploads finish and back up settings, certificates and media before updating:
+Let uploads finish before updating:
 
 ```sh
 docker compose pull

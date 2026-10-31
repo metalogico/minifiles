@@ -27,7 +27,15 @@ npm run build
 npm run format:check
 ```
 
-`build` runs the TypeScript/Vue check before producing `dist/`. `npm run format` applies the pinned Prettier version and the root `.prettierrc.json` settings. The queue tests cover progress and finalisation, duplicates, cancellation, concurrent additions and session reset. Other tests cover folder selection, macOS metadata filtering, statistics refresh and stable queue rendering.
+`build` runs the TypeScript/Vue check before producing `dist/`. `npm run format` applies the pinned Prettier version and the root `.prettierrc.json` settings. The queue tests cover progress and finalisation, duplicates, cancellation, concurrent additions and session reset. Other tests cover folder selection, macOS metadata filtering and statistics refresh. These are application-logic tests running in Node; they do not render Vue components or use the DOM.
+
+## Regression test policy
+
+Keep regression tests focused on application logic, backend/API contracts, database queries and persistence, migrations, validation, authentication, filesystem safety and concurrency. Frontend queue, file-selection and statistics logic may be tested without rendering components.
+
+Do not add or run UI regression tests: component/SSR rendering, HTML/DOM assertions, CSS or layout checks, interface wording, screenshots, animation timelines or automated browser UI flows. Build, typechecking, lint and HTTP/API/persistence smoke checks remain supported. Historical UI verification reports do not require those tests to be restored.
+
+The permanent project rule is [testing.md](../.agents/rules/testing.md).
 
 ## Local app
 
