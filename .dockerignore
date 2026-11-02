@@ -26,6 +26,8 @@ release.json
 *.pem
 .DS_Store
 **/.openai
+**/.codex
+/scripts/
 
 .github/
 .agents/

@@ -16,53 +16,16 @@ A small, self-hosted file browser for a home server. Browse a mounted drive, org
 - Skip existing files automatically. MiniFiles never overwrites files; existing folders are reused.
 - Cancel individual items, or finish the current file and discard the remaining queue.
 - View filesystem disk usage and section sizes, refreshed at startup, at the end of a queue, or manually.
-- Sign in with one configured account, protected by an HTTPS session cookie.
+- Sign in with one configured account.
 - Stream large uploads directly to disk with limited server memory use.
 
 The interface is in English and designed for desktop screens at least 1100 px wide. Names you give files and sections are preserved. Download, preview, rename, move and delete operations are outside this version's scope. Interrupted uploads restart from the beginning.
 
 ## Install with Docker Compose
 
-Docker image: **`ghcr.io/metalogico/minifiles:latest`**
+The public image is **`ghcr.io/metalogico/minifiles:latest`**, available for AMD64 and ARM64. Docker Compose 2.24.4 or newer is required.
 
-Requires Docker with Compose 2.24.4 or newer. Images support `linux/amd64` and `linux/arm64`.
-
-### Download the configuration
-
-For a new installation:
-
-```sh
-mkdir minifiles
-cd minifiles
-curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/compose.yaml -o compose.yaml
-curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/.env.example -o .env.example
-cp .env.example .env
-chmod 600 .env
-mkdir -p local-data local-config
-```
-
-Already installed? Keep your `.env` and follow [Updating](#data-and-updates).
-
-### Configure and start
-
-Edit `.env` before starting:
-
-1. Replace `MINIFILES_USERNAME` and `MINIFILES_PASSWORD` with your own credentials.
-2. Set `MINIFILES_UID` and `MINIFILES_GID` to an identity that can write to both directories. On Linux, `id -u` and `id -g` show your current identity. Make the settings directory private with `chmod 700 local-config`.
-3. For an existing drive, set `MINIFILES_DATA_PATH` to its mounted path and verify its permissions. Do not change an existing collection's ownership or permissions recursively.
-4. Keep the loopback address for local use, or set the host, bind address and exact HTTPS origin for LAN access using either an existing reverse proxy or the optional Caddy setup in the [installation guide](docs/INSTALL.md).
-
-```sh
-docker compose config --quiet
-docker compose pull
-docker compose up -d --wait
-```
-
-Open `http://127.0.0.1:8090` on the server and sign in.
-
-For LAN access, use HTTPS through your existing reverse proxy. Set `MINIFILES_ORIGIN` to the exact public HTTPS address and forward to the app's HTTP port. See [existing reverse proxies](docs/INSTALL.md#use-an-existing-reverse-proxy).
-
-For HTTPS without an existing proxy, follow the [Caddy setup](docs/INSTALL.md#optional-caddy-https). It adds the official Caddy image and stores its certificates in `tls-data`.
+Follow [Installation](docs/INSTALL.md) to download the configuration, set your credentials and start MiniFiles. For access from another computer, see [HTTPS and network access](docs/HTTPS.md).
 
 ## Use
 
@@ -87,21 +50,13 @@ macOS metadata named `.DS_Store` (case insensitive) or beginning with `._` is ex
 
 These bind mounts survive container recreation. Sessions are held in memory, so restarting requires signing in again. Data protection and recovery are managed outside MiniFiles.
 
-Let uploads finish before updating:
-
-```sh
-docker compose pull
-docker compose stop
-docker compose up -d --wait
-```
-
-Keep the same `.env`, Compose project, data and override files. If you pinned an image version, change its reference in `.env` before pulling. See [UPGRADING.md](docs/UPGRADING.md) for recovery and migration details.
+Let uploads finish before updating, and keep the same `.env`, Compose project, storage paths and override files. Follow [Updating](docs/UPGRADING.md) for the commands and recovery notes.
 
 Run one MiniFiles instance per data directory. Uploaded files use mode `600` and the configured UID/GID; other services need compatible permissions to read them.
 
 ## Development
 
-See [Development](docs/DEVELOPMENT.md) for source builds and tests, and [Releasing](docs/RELEASING.md) for publishing images.
+See [Development](docs/DEVELOPMENT.md) for source builds and tests.
 
 ## License
 

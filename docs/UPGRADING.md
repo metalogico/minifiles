@@ -1,15 +1,18 @@
-# Updates and the first image-based installation
+# Updating MiniFiles
 
-Use `https://github.com/metalogico/minifiles/archive/COMMIT.tar.gz` for a source archive matching a pinned image, replacing COMMIT with the full published main commit SHA.
+Let active uploads finish before updating. Keep your `.env`, storage directories and Compose files. Back up your files and settings with your usual tools; stop MiniFiles before copying `local-config`, including any SQLite WAL/SHM files.
 
-## Before every update
+## Choose a version
 
-1. Review the target main commit and migration requirements. Retain the current version/image digest and installation files.
-2. Arrange data protection with your external tools before updating. Preserve `.env`, application data and any private TLS state. Stop MiniFiles before copying its settings directory, including any SQLite WAL/SHM files.
-3. Download the source archive for the target main commit into a **separate directory**. Compare its Compose and example environment with your deployed configuration. Copy approved configuration changes into the existing installation directory; keep your private `.env` and existing override files.
-4. Set `MINIFILES_IMAGE=ghcr.io/metalogico/minifiles:sha-COMMIT` in your existing `.env`, replacing COMMIT with the full published main commit SHA. `latest` is also supported, but a pinned commit gives you control over updates. Review new environment variables individually.
+By default, `MINIFILES_IMAGE=ghcr.io/metalogico/minifiles:latest` follows the published `main` build.
 
-Use the same `-p`, `--env-file` and `-f` options on **every** command when your deployment uses them. The abbreviated commands below assume the default files and project name. Let every upload finish before stopping the stack.
+To stay on a specific build, set `MINIFILES_IMAGE=ghcr.io/metalogico/minifiles:sha-COMMIT` in `.env`, replacing `COMMIT` with the full published main commit SHA. You can also pin an image digest. Note your current image reference and digest before changing it, in case you need to go back.
+
+Review any configuration or migration changes for the target version. Compare its Compose files and `.env.example` with your installation, keeping your private values and overrides. If you need the matching source, download `https://github.com/metalogico/minifiles/archive/COMMIT.tar.gz` into a separate directory.
+
+## Update the containers
+
+From your installation directory:
 
 ```sh
 docker compose config --quiet
@@ -19,33 +22,28 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-Pull before stopping to reduce downtime. If the pull fails, the running version remains available. If startup or a migration fails, stop the stack and inspect this stack's logs; do not restart background services against a failed migration. Successful health checks should be followed by sign-in, checking existing records/files, a small upload and verification through your external tools.
+If you use the included Caddy setup, use `docker compose -f compose.yaml -f compose.https.yaml` in place of `docker compose` on every line. Keep any custom `-p`, `--env-file` or `-f` options on every command too.
 
-Stopping/recreating containers preserves persistent storage. **Never run `down -v`, `migrate:fresh`, database resets or volume pruning as part of an update.** Updates do not regenerate credentials, keys or the CA.
+Pulling happens before stopping, so a failed download leaves the current version running. Container replacement preserves the bind-mounted files and settings. Keep their paths and UID/GID unchanged. Do not delete storage directories, reset the database or prune volumes during an update.
 
-## Existing source-built installations: first transition to published images
+Once the service is healthy, sign in and check your sections and files. Restarting clears existing sessions. If startup fails, stop the stack and check `docker compose logs --tail 50` with the same Compose options.
 
-Changing the image is safe only when it uses the same storage and a compatible schema. Older development revisions could change migrations in place. The first release does not infer or repair every historical development schema.
+## Moving from a source build
 
-- Record the current Compose project name from container labels, actual volume names and bind mount paths, numeric UID/GID, environment file and override files. `docker compose ps` and `docker inspect <container>` help inspect the installation; avoid sharing their secret-bearing output.
-- Compare the deployed database schema and migration history with the v1 baseline using an isolated settings copy prepared while MiniFiles is stopped. Run the candidate image in a separate project with copied data, separate ports and bind directories. Confirm existing records and files, authentication and migrations. A production mount must never be used for this rehearsal.
-- If the old schema differs, prepare and test a specific incremental migration/import before updating the real stack. Do not delete rows from Laravel's migrations table or reset SQLite's schema version to force startup.
-- Keep the real `.env`, `APP_KEY` where applicable, login values, API credentials and HTTPS CA. Replace only the old local image reference with the GHCR reference. Remove any source-build override from the production command or `COMPOSE_FILE`.
-- Preserve all existing data mounts and the exact Compose project name. A different name selects new empty volumes; that does not mean the original data was erased.
-- Perform the regular update above only after the rehearsal succeeds. Retain the old image and pre-update state until the new installation is verified.
+Remove `compose.build.yaml` from your commands or `COMPOSE_FILE`, and set `MINIFILES_IMAGE` to the published image you want. Keep the same project name, `.env`, storage paths, UID/GID and HTTPS settings.
 
-The local smoke script tests a fresh image-only install and persistence across container recreation. GitHub Actions does not run these tests. It does not inspect or migrate a particular home server's historical database.
+Older development builds could change the database schema in place. If yours predates the first published image, check compatibility using copies of its data and settings before updating. A different schema may need a specific migration; do not reset SQLite's schema version to force startup.
 
-## Move from the custom HTTPS image to official Caddy
+## Moving from the old custom HTTPS image
 
-The base Compose now contains only MiniFiles. Existing HTTPS installations must explicitly include `-f compose.yaml -f compose.https.yaml` on every command, including the initial pull and recreation. Keep the same Compose project name, `.env`, HTTPS origin, bind address, port, UID/GID and absolute data/settings/TLS paths.
+Use `compose.yaml` together with `compose.https.yaml` and place the supplied `docker/Caddyfile` in your installation directory. Keep any deliberate local changes to that file.
 
-The service remains named `https`, and the TLS mount inside Caddy remains `/data`. The official image is pinned to the same Caddy version used by the former custom image. Reusing that mount preserves the CA and its private keys; do not create a replacement TLS directory. Place the supplied `docker/Caddyfile` in the installation directory, preserving any deliberate local customizations. The new override mounts it read-only. `MINIFILES_HTTPS_IMAGE` and `MINIFILES_HTTPS_BUILD_IMAGE` are no longer used and can be removed from the private environment.
+Keep the existing `MINIFILES_TLS_PATH` and its contents: they contain the CA trusted by your clients. The proxy service is still named `https`, with TLS state mounted at `/data`. The old `MINIFILES_HTTPS_IMAGE` and `MINIFILES_HTTPS_BUILD_IMAGE` variables are no longer used.
 
-Rehearse the transition using copied settings and TLS state in an isolated stack. Check CA-verified HTTPS, login, existing sections and files. The local smoke script can exercise the transition with `--https --previous-proxy-image OLD_LOCAL_IMAGE` when that old image is available.
+If you switch to your own reverse proxy instead, follow [HTTPS and network access](HTTPS.md#use-an-existing-reverse-proxy) and check client trust before retiring the old proxy.
 
-If switching to an already-existing reverse proxy instead, follow [INSTALL.md](INSTALL.md#use-an-existing-reverse-proxy). A different proxy may use a different CA; preserve the old TLS state and plan client trust explicitly.
+## Rolling back
 
-## Rollback
+An older image may not understand a database that has already been migrated. MiniFiles refuses a schema newer than it supports.
 
-After a schema migration, switching back to an older image alone may be unsafe. Stop all writers, recover the matching pre-update database, files and configuration through your external recovery process, and select the previous pinned image tag or digest. Rehearse recovery in an isolated project first. Keep the same application key and CA. MiniFiles refuses a database schema newer than the running image understands.
+Stop MiniFiles, restore matching pre-update settings and files from your backup, and select the previous image. Keep the original credentials and HTTPS CA. Check recovery using copies before replacing the live installation.
