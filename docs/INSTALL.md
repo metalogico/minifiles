@@ -1,13 +1,23 @@
 # Installation
 
-MiniFiles uses one published GHCR application image with Docker Compose. Download `compose.yaml` and `.env.example` using the [README](../README.md#install-with-docker-compose), then run these commands from that installation directory. Docker Compose 2.24.4 or newer is required.
+MiniFiles runs with Docker Compose. The public image is `ghcr.io/metalogico/minifiles:latest`, available for AMD64 and ARM64. No registry login is needed.
 
-## Prepare the host
+You need Docker with Compose 2.24.4 or newer and a directory to store your files. Run the commands below on the machine that will host MiniFiles, using a non-root account.
 
-- Use a local filesystem with hard-link support and Linux ownership/permissions. Uploads are published through a hard link on the data filesystem. Nested mounts and symlinks are not upload destinations.
-- Allow enough disk space for the uploaded files plus the configured reserve (1 GiB by default). Temporary uploads live on the data disk, not in the container's writable layer.
-- Choose one numeric UID/GID that can write to the data root, settings directory (and TLS directory when using optional Caddy). MiniFiles runs without root and does not change host ownership automatically.
-- Reserve an available TCP port, 8090 by default. The base stack publishes HTTP on loopback; the HTTPS override replaces that listener with Caddy.
+Already running MiniFiles? Follow [Updating](UPGRADING.md) instead.
+
+## 1. Get the configuration
+
+```sh
+mkdir minifiles
+cd minifiles
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/compose.yaml -o compose.yaml
+curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/.env.example -o .env.example
+```
+
+If you have already cloned or downloaded the repository, open its root directory and skip this step. Keep using the same directory for the remaining commands.
+
+## 2. Set up storage and credentials
 
 ```sh
 cp .env.example .env
@@ -18,123 +28,70 @@ id -u
 id -g
 ```
 
-Edit `.env` and put the last two numbers in `MINIFILES_UID` and `MINIFILES_GID`. If you are logged in as root, choose a non-root service identity instead of UID 0. Replace both credential placeholders. Single-quote passwords containing `$` or `#` so Compose treats those characters literally; use a password without single quotes or follow Compose's escaping rules.
+Edit `.env`:
 
-For a new installation under a different service account, create only the new settings/TLS directories with that account's ownership. For an existing data disk, inspect its mount and permissions first. Do not recursively change an existing collection's ownership or permissions. Uploaded files are owned by the configured service UID/GID with mode `600`, so another service needs a compatible identity to read them.
+- Replace both `CHANGE_ME` values with your username and password. Keep the single quotes around them, especially if the password contains `$` or `#`. Choose a password without single quotes, or follow Docker Compose's escaping rules.
+- Set `MINIFILES_UID` to the number printed by `id -u`, and `MINIFILES_GID` to the number printed by `id -g`. MiniFiles uses this identity to read and write files.
+- Leave `MINIFILES_DATA_PATH=./local-data` to start with an empty folder. To browse an existing disk, set it to the disk's mounted directory instead, for example `/mnt/storage`.
 
-Set `MINIFILES_DATA_PATH` to the actual mounted data directory. The default `./local-data` is an empty local installation. Compose deliberately refuses missing bind paths rather than silently creating a directory on the wrong disk.
+The data and settings directories must exist and be writable by the configured UID/GID. If you use another service account, give it access to these directories. Check an existing disk's permissions before changing anything; do not recursively change ownership or permissions on your collection.
 
-## Local start
+Storage must support hard links and Linux file permissions. Symlinks and nested mounts cannot be upload destinations. Leave enough free space for your uploads plus the reserve, which defaults to 1 GiB.
 
-The base `.env.example` uses `MINIFILES_ORIGIN=http://127.0.0.1:8090`. This HTTP setup is only for the server itself. MiniFiles requires an HTTPS origin for use outside loopback.
+## 3. Start MiniFiles
 
 ```sh
 docker compose config --quiet
 docker compose pull
 docker compose up -d --wait
-docker compose ps
 ```
 
-Open `http://127.0.0.1:8090`. Only the MiniFiles image is downloaded. The app health check calls `/health`; configuration, streaming uploads and the one-worker model are unchanged.
+Open **http://127.0.0.1:8090** in a browser on the same machine and sign in with the credentials from `.env`.
 
-## Use an existing reverse proxy
+This address is local to the host. To open MiniFiles from another computer or over your home network, set up [HTTPS](HTTPS.md) using your reverse proxy or the included Caddy configuration. MiniFiles requires HTTPS outside localhost.
 
-Keep `MINIFILES_BIND_IP=127.0.0.1` when the reverse proxy runs on the host. Set `MINIFILES_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://files.home.arpa`. Forward all paths to `http://127.0.0.1:8090`, preserving the Host and Origin headers. Recreate MiniFiles after editing `.env`.
+## Stop, restart and update
 
-If the proxy runs in another container, its localhost is not the Docker host. Connect it and MiniFiles to a shared Docker network with an override and use `minifiles:8000` as the upstream; remove the host port with `ports: !reset []` if it is not needed. Do not expose the plain HTTP listener on an untrusted network. Configure the proxy for streaming request bodies, sufficient upload limits and timeouts for large files. TLS and certificate management belong to that proxy.
+Stop MiniFiles with `docker compose stop`. Start it again with `docker compose up -d --wait`.
 
-For an existing Caddy installation, the relevant upstream directive is:
+Your files and settings live in the host directories, so they survive container replacement. Keep those directories and `.env`; MiniFiles does not back them up for you. See [Updating](UPGRADING.md) before replacing the image.
 
-```caddyfile
-files.home.arpa {
-    tls internal
-    reverse_proxy 127.0.0.1:8090
-}
-```
+## Settings
 
-This example assumes Caddy runs on the same host and uses a local CA; keep your existing certificate configuration when appropriate. Do not add the MiniFiles HTTPS override when using your own proxy.
+Most installations only need the credentials, UID/GID and storage path changed. The other values in `.env` can stay at their defaults.
 
-## Optional Caddy HTTPS
-
-`compose.https.yaml` adds the official, digest-pinned `caddy` image. There is no custom MiniFiles proxy image. Caddy runs with the configured non-root UID/GID, a read-only root filesystem and only `NET_BIND_SERVICE` in its capability bounding set, which the official binary's file capability requires. It reads `docker/Caddyfile` through a read-only bind and keeps its existing CA under `MINIFILES_TLS_PATH`.
-
-Download the optional HTTPS configuration into the same installation directory and create a private TLS directory owned by the service identity:
-
-```sh
-curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/compose.https.yaml -o compose.https.yaml
-mkdir -p docker tls-data
-curl -fL https://raw.githubusercontent.com/metalogico/minifiles/main/docker/Caddyfile -o docker/Caddyfile
-chmod 700 tls-data
-```
-
-For local HTTPS, set `MINIFILES_ORIGIN=https://127.0.0.1:8090`. For LAN access, use a hostname that resolves to your server or its IPv4 address, and set these values together:
-
-```dotenv
-MINIFILES_ORIGIN=https://files.home.arpa:8090
-MINIFILES_TLS_HOST=files.home.arpa
-MINIFILES_BIND_IP=0.0.0.0
-MINIFILES_PORT=8090
-```
-
-The TLS host has no scheme, port or path; the origin is the exact browser URL including the non-default port. Use a specific LAN bind address instead of `0.0.0.0` when appropriate. The supplied configuration uses a local CA, not a public certificate.
-
-```sh
-docker compose -f compose.yaml -f compose.https.yaml config --quiet
-docker compose -f compose.yaml -f compose.https.yaml pull
-docker compose -f compose.yaml -f compose.https.yaml up -d --wait
-```
-
-**Keep both `-f` options for every subsequent command**, including updates. The merged configuration publishes only Caddy's HTTPS port; the application's HTTP port is removed. The proxy starts after the app is healthy; verify its HTTPS response as described below. `config --quiet` validates configuration without printing credentials, but does not verify host permissions or TLS trust.
-
-## HTTPS and client trust
-
-On first startup Caddy creates the CA and certificate in `MINIFILES_TLS_PATH`. With the default path, the **public** CA certificate is:
-
-```text
-tls-data/caddy/pki/authorities/local/root.crt
-```
-
-Copy only that certificate to each client and use the operating system/browser's certificate settings to trust it as a CA. On macOS this is Keychain Access; on Windows use the Trusted Root Certification Authorities store. On Linux use the distribution's CA installation procedure. Some browsers maintain a separate certificate store and need their own import. Verify the certificate's fingerprint through your trusted server connection before trusting it.
-
-Keep `root.key`, `intermediate.key` and the rest of `tls-data` private on the server. Never send the CA's private key to clients. Keep the same TLS directory across updates so existing clients continue to recognise the CA.
-
-You can check the service without modifying a system trust store:
-
-```sh
-curl --cacert tls-data/caddy/pki/authorities/local/root.crt https://127.0.0.1:8090/health
-```
-
-Use your configured hostname/IP and port in that URL. Expected result: `{"status":"ok"}`. Do not use `curl -k` as a substitute for certificate verification. Open the same URL without `/health` to sign in after installing client trust.
-
-A certificate error usually means the client does not trust the CA, the browser's hostname differs from `MINIFILES_TLS_HOST`, or an old certificate/CA was retained by the client. An origin error at login means `MINIFILES_ORIGIN` differs from the address in the browser. Restart after editing `.env`:
-
-```sh
-docker compose -f compose.yaml -f compose.https.yaml up -d --force-recreate --wait
-```
-
-## Configuration reference
-
-| Variable | Default / meaning |
+| Variable | Default / purpose |
 | --- | --- |
-| `MINIFILES_USERNAME`, `MINIFILES_PASSWORD` | Required single account; no usable defaults |
-| `MINIFILES_ORIGIN` | Required exact web origin; HTTPS outside loopback development |
-| `MINIFILES_TLS_HOST` | `127.0.0.1`; certificate hostname/IP |
-| `MINIFILES_BIND_IP`, `MINIFILES_PORT` | `127.0.0.1`, `8090`; host listener |
-| `MINIFILES_UID`, `MINIFILES_GID` | `1000`, `1000`; numeric process identity |
-| `MINIFILES_IMAGE` | GHCR application reference: latest or sha-COMMIT; Caddy is pinned separately in its override |
-| `MINIFILES_DATA_PATH` | `./local-data`; mounted at `/data` in the app |
-| `MINIFILES_CONFIG_PATH` | `./local-config`; mounted at `/config` |
-| `MINIFILES_TLS_PATH` | `./tls-data`; mounted at `/data` in the proxy |
-| `MINIFILES_SESSION_SECONDS` | `43200`; absolute session lifetime (12 hours) |
-| `MINIFILES_UPLOAD_IDLE_SECONDS` | `120`; idle receive timeout, not total transfer duration |
-| `MINIFILES_MAX_UPLOADS` | `4`; reservations across all pages |
-| `MINIFILES_MAX_UPLOAD_BYTES` | `0`; unlimited by the app; positive values set a byte limit |
-| `MINIFILES_RESERVE_BYTES` | `1073741824`; free-space margin (1 GiB) |
+| `MINIFILES_USERNAME`, `MINIFILES_PASSWORD` | Your login credentials; replace both placeholders |
+| `MINIFILES_UID`, `MINIFILES_GID` | `1000`, `1000`; set these to the identity that owns your storage |
+| `MINIFILES_DATA_PATH` | `./local-data`; your files |
+| `MINIFILES_CONFIG_PATH` | `./local-config`; sections and cached statistics |
+| `MINIFILES_ORIGIN` | `http://127.0.0.1:8090`; the exact browser address, with no path |
+| `MINIFILES_BIND_IP`, `MINIFILES_PORT` | `127.0.0.1`, `8090`; where Docker listens on the host |
+| `MINIFILES_IMAGE` | `ghcr.io/metalogico/minifiles:latest`; see [version selection](UPGRADING.md#choose-a-version) |
+| `MINIFILES_SESSION_SECONDS` | `43200`; sign-in lasts 12 hours |
+| `MINIFILES_UPLOAD_IDLE_SECONDS` | `120`; timeout when an upload stops sending data, not a total time limit |
+| `MINIFILES_MAX_UPLOADS` | `4`; concurrent upload reservations across all browser tabs |
+| `MINIFILES_MAX_UPLOAD_BYTES` | `0`; no file-size limit. Set a positive value in bytes to add one |
+| `MINIFILES_RESERVE_BYTES` | `1073741824`; free space to keep available, in bytes |
 
-Do not increase the worker count or scale the app service. The exclusive data-root lock prevents a second instance; sessions and reservations belong to one process.
+After changing `.env`, run `docker compose up -d --wait` to apply it. If you change the port, update `MINIFILES_ORIGIN` to match. HTTPS settings are covered in the [HTTPS guide](HTTPS.md).
 
-## Updates and recovery
+Run one MiniFiles instance per data directory. Uploaded files use mode `600` and the configured UID/GID; other services need compatible permissions to read them.
 
-Let uploads finish before updating. Data protection and recovery are managed externally. Follow [UPGRADING.md](UPGRADING.md) for version selection, container replacement and the first transition from source builds. Keep the same `.env`, data/settings/TLS paths and numeric identity. Verify the CA, sign in and check sections/files after the update.
+## If it does not start
 
-Stop the stack while preserving data with `docker compose stop`. Do not delete bind directories during an update. Source builds use the separate `compose.build.yaml` override described in [RELEASING.md](RELEASING.md).
+Check the container state and recent logs:
+
+```sh
+docker compose ps
+docker compose logs --tail 50
+```
+
+- **Missing bind directory:** create the directory named in `.env`. For an external disk, confirm it is mounted at the expected path first.
+- **Permission denied:** check that the configured UID/GID can write to both the data and settings directories.
+- **Credentials not configured:** replace the `CHANGE_ME` values in `.env`.
+- **Port already in use:** choose a free `MINIFILES_PORT` and update `MINIFILES_ORIGIN` with the same port.
+- **Origin error at login:** open the exact address in `MINIFILES_ORIGIN`. `localhost` and `127.0.0.1` are different origins.
+
+If you enabled Caddy, include both Compose files in these commands as shown in the [HTTPS guide](HTTPS.md#start-caddy).

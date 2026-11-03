@@ -19,18 +19,15 @@ tls-data/
 .DS_Store
 ._*
 .openai/
+.codex/
 *.tar
 *.tar.gz
 *.pem
 *.key
 
-# Private operational history stays on this machine.
+# Local files
 AGENTS.md
+.agents/
+/scripts/
 design-qa.md
 release.json
-docs/DEPLOY.md
-docs/SECURITY_RELEASE.md
-docs/VERIFICHE.md
-docs/verification/
-landing/VERIFICATION.md
-landing/
